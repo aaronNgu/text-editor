@@ -51,6 +51,7 @@ void enableRawMode()
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
+// reads one key and returns key press as char
 char editorReadKey()
 {
     int nread;
@@ -60,6 +61,14 @@ char editorReadKey()
         if (nread == -1 && errno != EAGAIN) die("read");
     }
     return c;
+}
+
+/*** output ***/
+void editorRefreshScreen()
+{
+    // write escape sequence(escape + [)
+    // \x1b is escape char, 2 means clear entire screen
+    write(STDOUT_FILENO, "\x1b[2J", 4);
 }
 
 /*** input ***/
@@ -80,6 +89,7 @@ int main()
     enableRawMode();
     while (1)
     {
+       editorRefreshScreen();
        editorProcessKeypress();
     }
     return 0;
