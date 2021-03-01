@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 /*** defines ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -111,28 +112,64 @@ int getWindowsSize(int *rows, int *cols)
     }
 }
 
+/*** append buffer - store here before writing ***/ 
+// used to write out tildes
+struct abuf 
+{
+    char *b;
+    int len;
+};
+
+// costructor for abuf type 
+#define ABUF_INIT {NULL, 0}
+
+void abAppend(struct abuf *ab, const char *s, int len) 
+{
+    // resize memory block pointed by ab->b 
+    // internally it 1. extends existing block or 2. allocates new memory and freeing old one
+    char *new = realloc(ab->b, ab->len + len);
+    
+    if (new == NULL) return;
+    memcpy(&new[ab->len], s, len);
+    ab->b = new;
+    ab->len += len;
+}
+
+void abFree(struct abuf *ab)
+{
+    free(ab->b);
+}
+
 /*** output ***/
-void editorDrawRows() 
+void editorDrawRows(struct abuf *ab) 
 {
     int y;
     for (y = 0; y < E.screenrows; y++) 
     {
-        write(STDOUT_FILENO, "~\r\n", 3);
+        abAppend(ab, "~", 1);
+        if (y < E.screenrows - 1) 
+        {
+            abAppend(ab, "\r\n",2);
+        }
     }
 }
 
 void editorRefreshScreen()
 {
+    struct abuf ab = ABUF_INIT;
     // write escape sequence(escape + [)
     // \x1b is escape char
     // 2J means clear entire screen
-    write(STDOUT_FILENO, "\x1b[2J", 4);
+    abAppend(&ab, "\x1b[2J", 4);
     // H sets Cursor Position to start of terminal 
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    abAppend(&ab, "\x1b[H",3);
 
-    editorDrawRows();
+    editorDrawRows(&ab);
 
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    abAppend(&ab, "\x1b[H",3);
+    
+    write(STDOUT_FILENO, ab.b, ab.len);
+    abFree(&ab);
 }
 
 /*** input ***/
