@@ -9,6 +9,7 @@
 
 /*** defines ***/
 #define CTRL_KEY(k) ((k) & 0x1f)
+#define KILO_VERSION "0.0.1"
 
 /*** data ***/
 struct editorConfig {
@@ -146,7 +147,23 @@ void editorDrawRows(struct abuf *ab)
     int y;
     for (y = 0; y < E.screenrows; y++) 
     {
-        abAppend(ab, "~", 1);
+        if (y == E.screenrows / 3) {
+            char welcome[80];
+            // format and store string in buffer
+            int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
+            if (welcomelen > E.screencols) welcomelen = E.screencols;
+            int padding = (E.screencols - welcomelen) / 2;
+            if (padding) {
+                abAppend(ab, "~", 1);
+                padding--;
+            } 
+            while (padding--) abAppend(ab, " ", 1);
+            abAppend(ab, welcome, welcomelen);
+        } else {
+            abAppend(ab, "~", 1);
+        }
+
+        abAppend(ab, "\x1b[K", 3);
         if (y < E.screenrows - 1) 
         {
             abAppend(ab, "\r\n",2);
@@ -157,16 +174,20 @@ void editorDrawRows(struct abuf *ab)
 void editorRefreshScreen()
 {
     struct abuf ab = ABUF_INIT;
+    // hides cursor will its writing tilde
+     abAppend(&ab, "\x1b[?25l", 6);
     // write escape sequence(escape + [)
     // \x1b is escape char
     // 2J means clear entire screen
-    abAppend(&ab, "\x1b[2J", 4);
+    // OLD  abAppend(&ab, "\x1b[2J", 4);
+
     // H sets Cursor Position to start of terminal 
     abAppend(&ab, "\x1b[H",3);
 
     editorDrawRows(&ab);
 
     abAppend(&ab, "\x1b[H",3);
+    abAppend(&ab, "\x1b[?25h", 6);
     
     write(STDOUT_FILENO, ab.b, ab.len);
     abFree(&ab);
