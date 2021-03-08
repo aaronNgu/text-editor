@@ -39,8 +39,10 @@ typedef struct erow {
 
 struct editorConfig {
     int cx, cy;
+    int rowoff;
     int screenrows;
     int screencols;
+    // num rows from user's file
     int numrows;
     erow* row;
     struct termios orig_termios;
@@ -259,12 +261,26 @@ void abFree(struct abuf *ab)
 }
 
 /*** output ***/
+void editorScroll()
+{
+    if (E.cy < E.rowoff) {
+        // scroll up 
+        E.rowoff = E.cy;
+    }
+    if (E.cy >= E.rowoff + E.screenrows) {
+        // scroll down - E.rowoff refers to what's at the top of the screen
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+}
+
 void editorDrawRows(struct abuf *ab) 
 {
     int y;
     for (y = 0; y < E.screenrows; y++) 
     {
-        if (y >= E.numrows) {
+        int filerow = y + E.rowoff;
+        if (filerow >= E.numrows) {
+            // Print lines not part of file
             if (y == E.screenrows / 3 && E.numrows == 0) {
                 char welcome[80];
                 // format and store string in buffer
@@ -281,9 +297,9 @@ void editorDrawRows(struct abuf *ab)
                 abAppend(ab, "~", 1);
             }
         } else {
-            int len = E.row[y].size;
+            int len = E.row[filerow].size;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row[y].chars, len);
+            abAppend(ab, E.row[filerow].chars, len);
         }
         abAppend(ab, "\x1b[K", 3);
         if (y < E.screenrows - 1) 
@@ -296,6 +312,7 @@ void editorDrawRows(struct abuf *ab)
 
 void editorRefreshScreen()
 {
+    editorScroll();
     struct abuf ab = ABUF_INIT;
     // hides cursor will its writing tilde
     abAppend(&ab, "\x1b[?25l", 6);
@@ -310,7 +327,8 @@ void editorRefreshScreen()
     editorDrawRows(&ab);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+    // move cursor to specfic x and y position
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff)+ 1, E.cx + 1);
     abAppend(&ab, buf, strlen(buf));
 
     abAppend(&ab, "\x1b[?25h", 6);
@@ -342,7 +360,7 @@ void editorMoveCursor(int key)
             }
             break;
         case ARROW_DOWN:
-            if (E.cy != E.screenrows - 1) 
+            if (E.cy != E.numrows) 
             {
                 E.cy++;
             }
@@ -393,6 +411,7 @@ void initEditor()
     E.cy = 0;
     E.numrows = 0;
     E.row = NULL;
+    E.rowoff = 0;
     if (getWindowsSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
 }
 
